@@ -28,11 +28,14 @@ const SEGMENT_TAG = 'ytd-transcript-segment-renderer';
 
 const OUTPUT_FILE_NAME = 'result.json';
 
+const URL = 'https://www.youtube.com/watch?v=C366hnsI8UI';
+
 /**
  * @typedef {import('puppeteer').Page} Page
  * @param {Page} page - The url of the video.
  * @returns {Promise<Omit<VideoInfo, 'transcripts'>>}
  */
+
 async function fetchVideoInfo(page) {
     const title = await page.$eval('#title.ytd-watch-metadata yt-formatted-string', (node) => node.textContent) || '';
     const name = await page.$eval('#upload-info a.yt-simple-endpoint', (node) => node.textContent) || '';
@@ -47,15 +50,8 @@ async function fetchVideoInfo(page) {
 /**
  * @returns {Promise<VideoInfo>}
  */
-async function main() {
-    const url = 'https://www.youtube.com/watch?v=WSlV5PW3QP8';
-    const browser = await puppeteer.launch({headless: false});
-    const page = await browser.newPage();
-    await page.goto(url, {waitUntil: 'networkidle0'});
-    await page.waitForSelector(LIST_TAG);
 
-    const info = await fetchVideoInfo(page);
-
+async function fetchVideoTranscripts(page) {
     const sectionList = await page.$(`${LIST_TAG}:last-child`);
     await sectionList.evaluate((node) => node.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_EXTENDED'));
     // wait for section list to load
@@ -92,22 +88,38 @@ async function main() {
     if (untitled.contents.length > 0) {
         transcripts.push(untitled);
     }
+    return transcripts;
+}
 
-    await browser.close();
-    return {
+async function main() {
+
+    let data = [];
+
+    const browser = await puppeteer.launch({headless: false});
+    let page = await browser.newPage();
+    await page.goto(url, {waitUntil: 'networkidle0'});
+    await page.waitForSelector(LIST_TAG);
+    let info = await fetchVideoInfo(page);
+    console.log(info);
+    let transcripts = await fetchVideoTranscripts(page);
+    console.log(transcripts);
+    
+    data.push({
         ...info,
         transcripts,
-    };
+    });
+
+    return data;
 }
 /**
  * @param {VideoInfo} value
  */
 
-async function saveAsJsonFile(value) {
-    await writeFileSync(OUTPUT_FILE_NAME, JSON.stringify(value));
+async function saveAsJsonFile(info) {
+    await writeFileSync(OUTPUT_FILE_NAME, JSON.stringify(info));
     console.log('The file has been saved!');
 }
 
 main().then(async (info) => {
-    await saveAsJsonFile(info);
+    saveAsJsonFile(info);
 });
