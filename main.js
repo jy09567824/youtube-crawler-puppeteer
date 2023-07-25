@@ -19,22 +19,41 @@
  * @property {Content[]} contents - An array of content objects.
  */
 
+let times = 5;
+
 const puppeteer = require('puppeteer');
-const {writeFileSync} = require('fs');
+const fs = require('fs');
+const date = new Date().toISOString().slice(0, 19);
+
+const SETTINGS = 'ytd-masthead #end #button';
+const LANGUAGE = '#items > ytd-compact-link-renderer:nth-child(2)';
+const ZH_TW = '#items > ytd-compact-link-renderer:nth-child(80)';
+
+const MORE_ACTION = '#actions yt-button-shape:last-child button';
 
 const LIST_TAG = 'ytd-engagement-panel-section-list-renderer';
 const HEADER_TAG = 'ytd-transcript-section-header-renderer';
 const SEGMENT_TAG = 'ytd-transcript-segment-renderer';
+const CROSS_BUTTON = 'button[aria-label="關閉轉錄稿"]';
 
-const OUTPUT_FILE_NAME = 'result.json';
+const OUTPUT_FILE_NAME = `${date}_result.json`;
 
-const URL = 'https://www.youtube.com/watch?v=C366hnsI8UI';
+const URL = 'https://www.youtube.com/watch?v=D1W520QVS4I';
 
 /**
  * @typedef {import('puppeteer').Page} Page
  * @param {Page} page - The url of the video.
  * @returns {Promise<Omit<VideoInfo, 'transcripts'>>}
  */
+
+async function changeYoutubeLanguage(page) {
+    await page.waitForSelector(SETTINGS);
+    await page.click(SETTINGS);
+    await page.waitForSelector(LANGUAGE);
+    await page.click(LANGUAGE);
+    await page.waitForSelector(ZH_TW);
+    await page.click(ZH_TW);
+}
 
 async function fetchVideoInfo(page) {
     const title = await page.$eval('#title.ytd-watch-metadata yt-formatted-string', (node) => node.textContent) || '';
@@ -52,71 +71,106 @@ async function fetchVideoInfo(page) {
  */
 
 async function fetchVideoTranscripts(page) {
-    const sectionList = await page.$(`${LIST_TAG}:last-child`);
-    await sectionList.evaluate((node) => node.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_EXTENDED'));
-    // wait for section list to load
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    const sectionsElements = await sectionList.$$(`${HEADER_TAG}, ${SEGMENT_TAG}`);
 
     /** @type {Transcripts[]} */
     const transcripts = [];
     /** @type {Transcripts} */
     const untitled = {title: 'Untitled', contents: []};
+   
+    await page.click(MORE_ACTION);
+    await page.waitForSelector('ytd-popup-container > tp-yt-iron-dropdown');
+    try {
+        let transcriptChecker = false;
+        const actionList = await page.$$('ytd-menu-service-item-renderer');
 
-    /** @type {Transcripts|null} */
-    let cursor = null;
-    for (const section of sectionsElements) {
-        const tagName = await section.evaluate((node) => node.tagName);
-        if (tagName === HEADER_TAG.toUpperCase()) {
-            /** @type string */
-            const title = await section.$eval('yt-formatted-string', (node) => node.textContent) || '';
-            transcripts.push({title, contents: []});
-            cursor = transcripts[transcripts.length - 1];
-            continue;
+        for (const actionItem of actionList) {
+            const itemText = await actionItem.evaluate((node) => node.textContent);
+            if (itemText.includes('轉錄稿') || itemText.includes('transcript')) {
+                console.log('Transcript found!');
+                transcriptChecker = true;
+                await actionItem.click();
+                await page.waitForSelector('ytd-transcript-segment-renderer');
+
+                // const sectionList = await page.$('#segments-container');
+                const sectionList = await page.$(`${LIST_TAG}:last-child`);
+                await sectionList.evaluate((node) => node.setAttribute('visibility', 'ENGAGEMENT_PANEL_VISIBILITY_EXTENDED'));
+                // wait for section list to load
+                await new Promise((resolve) => setTimeout(resolve, 1000));
+                const sectionsElements = await sectionList.$$(`${HEADER_TAG}, ${SEGMENT_TAG}`);
+            
+                /** @type {Transcripts|null} */
+                let cursor = null;
+                for (const section of sectionsElements) {
+                    const tagName = await section.evaluate((node) => node.tagName);
+                    if (tagName === HEADER_TAG.toUpperCase()) {
+                        /** @type string */
+                        const title = await section.$eval('yt-formatted-string', (node) => node.textContent) || '';
+                        transcripts.push({title, contents: []});
+                        cursor = transcripts[transcripts.length - 1];
+                        continue;
+                    }
+            
+                    const timestamp = await section.$eval('.segment-timestamp', (node) => node?.textContent.trim()) || '';
+                    const text = await section.$eval('yt-formatted-string', (node) => node.textContent) || '';
+                    if (cursor) {
+                        cursor.contents.push({timestamp, text});
+                    } else {
+                        untitled.contents.push({timestamp, text});
+                    }
+                }
+            
+                if (untitled.contents.length > 0) {
+                    transcripts.push(untitled);
+                }
+                console.log('Get transcript done!');
+                await page.click(CROSS_BUTTON);
+                return transcripts;
+            }
         }
-
-        const timestamp = await section.$eval('.segment-timestamp', (node) => node?.textContent.trim()) || '';
-        const text = await section.$eval('yt-formatted-string', (node) => node.textContent) || '';
-        if (cursor) {
-            cursor.contents.push({timestamp, text});
-        } else {
-            untitled.contents.push({timestamp, text});
+        if (transcriptChecker === false) {
+            console.log('No transcript found!');
+            return untitled;
         }
+    } catch (error) {
+        console.log(error);
+        return untitled;
     }
+}
 
-    if (untitled.contents.length > 0) {
-        transcripts.push(untitled);
+async function fetchData(page, times) {
+
+    let results = [];
+
+    for (let i = 0; i < times; i++) {
+            await page.waitForSelector(LIST_TAG);
+            const info = await fetchVideoInfo(page);
+            const transcripts = await fetchVideoTranscripts(page);
+            results.push({...info, transcripts});
+            // goto next page
+            console.log('Goto next page...');
+            const hrefElement = await page.$('a.ytp-next-button');
+            await hrefElement.evaluate((link) => link.click());
+            await new Promise((resolve) => setTimeout(resolve, 1500));
     }
-    return transcripts;
+    return results;
 }
 
 async function main() {
 
-    let data = [];
-
-    const browser = await puppeteer.launch({headless: false});
-    let page = await browser.newPage();
-    await page.goto(url, {waitUntil: 'networkidle0'});
-    await page.waitForSelector(LIST_TAG);
-    let info = await fetchVideoInfo(page);
-    console.log(info);
-    let transcripts = await fetchVideoTranscripts(page);
-    console.log(transcripts);
-    
-    data.push({
-        ...info,
-        transcripts,
-    });
-
+    const browser = await puppeteer.launch({headless: false, defaultViewport:null});
+    const page = await browser.newPage();
+    await page.goto(URL, {waitUntil: 'networkidle0'});
+    await changeYoutubeLanguage(page);
+    const data = await fetchData(page, times);
+    await browser.close();
     return data;
 }
 /**
  * @param {VideoInfo} value
  */
 
-async function saveAsJsonFile(info) {
-    await writeFileSync(OUTPUT_FILE_NAME, JSON.stringify(info));
+function saveAsJsonFile(value) {
+    fs.writeFileSync(OUTPUT_FILE_NAME, JSON.stringify(value));
     console.log('The file has been saved!');
 }
 
