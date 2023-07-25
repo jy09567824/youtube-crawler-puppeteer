@@ -1,16 +1,3 @@
-// data format example:
-// {  
-//     "name": "泛科學院",
-//     "title": "用完就回不去了！取代 PowerPoint 的強大 AI 工具？讓我從此只想用它做簡報？｜Gamma｜泛科學院", 
-//     "meta": "觀看次數：82萬次  1 個月前  AI 簡報大全",
-//     "description": "使用我的註冊連結 可獲得 200 點 AI 運算點數 ➤ https://gamma.app/signup?r=3502r0602a...Power Point可以被取代嗎？近期做簡報基本上已經不再使用 Power Point，原因就是...",
-//     "content": "介紹最強 AI 生成簡報工具？0:00今天要介紹的AI簡報工具0:01讓我認真思考0:02從此放棄Power Point了0:04之前我有支影片0:05分享了AI生成簡報的工具0:07..."
-// }
-
-<<<<<<< HEAD
-const puppeteer = require('puppeteer');
-const fs = require('fs');
-=======
 /**
  * @typedef {Object} VideoInfo
  * @property {string} name - The name of the channel.
@@ -19,7 +6,6 @@ const fs = require('fs');
  * @property {string} description - The description of the video.
  * @property {Transcripts[]} transcripts - The content of the video.
  */
->>>>>>> refs/remotes/origin/main
 
 /**
  * @typedef {Object} Content
@@ -41,7 +27,6 @@ const HEADER_TAG = 'ytd-transcript-section-header-renderer';
 const SEGMENT_TAG = 'ytd-transcript-segment-renderer';
 
 const OUTPUT_FILE_NAME = 'result.json';
-
 
 /**
  * @typedef {import('puppeteer').Page} Page
@@ -66,58 +51,8 @@ async function main() {
     const url = 'https://www.youtube.com/watch?v=WSlV5PW3QP8';
     const browser = await puppeteer.launch({headless: false});
     const page = await browser.newPage();
-<<<<<<< HEAD
-    await page.goto(url)
-    await page.waitForSelector('#button-shape > button > yt-touch-feedback-shape > div > div.yt-spec-touch-feedback-shape__fill');
-    await page.click('#button-shape > button > yt-touch-feedback-shape > div > div.yt-spec-touch-feedback-shape__fill');
-
-    const result = await page.$$eval('tp-yt-paper-listbox > ytd-menu-service-item-renderer', async elements => {
-        // wait time
-        let data = {};
-        function wait(ms) {
-            console.log('Start waiting...')
-            return new Promise((resolve) => {
-                setTimeout(() => {
-                    console.log(`Done waiting ${ms} ms`);
-                    resolve(ms);
-                }, ms);
-            });
-        };
-        async function getCaption(elements) {
-            console.log('getting caption...')
-            for (let ele of elements) {
-                let itemText = ele.innerText;
-                if (await itemText.includes('transcript') || await itemText.includes('轉錄稿')) {
-                    console.log(`it's caption button: ${itemText}`);
-                    await ele.click();
-                    await wait(1000);
-                    const name = await document.querySelector('#text > .yt-simple-endpoint').innerText || '';
-                    const title = await document.querySelector('h1 > yt-formatted-string').innerText || '';
-                    const meta = await document.querySelector('#info-container').innerText || '';
-                    const description = await document.querySelector('div #description').innerText || '';
-                    const content = await document.querySelector('#segments-container').innerText || '';
-                    Object.defineProperty(data, 'name', { value: name, writable: false });
-                    Object.defineProperty(data, 'content', { value: content, writable: false });             
-                    console.log({ earlyData: data });
-                    return data;
-                } else {
-                    console.log(`it's not caption button: ${itemText}`);
-                };
-            };
-            console.log('end getting caption')
-        };
-        data = await getCaption(elements);
-        console.log(data);
-        return data;
-    });
-    console.log(result);
-    // await browser.close();
-    return result;
-};
-=======
     await page.goto(url, {waitUntil: 'networkidle0'});
     await page.waitForSelector(LIST_TAG);
->>>>>>> refs/remotes/origin/main
 
     const info = await fetchVideoInfo(page);
 
@@ -164,10 +99,10 @@ async function main() {
         transcripts,
     };
 }
-
 /**
  * @param {VideoInfo} value
  */
+
 async function saveAsJsonFile(value) {
     await writeFileSync(OUTPUT_FILE_NAME, JSON.stringify(value));
     console.log('The file has been saved!');
