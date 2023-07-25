@@ -9,7 +9,6 @@
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
-const { get } = require('http');
 
 async function main() {
     const url = 'https://www.youtube.com/watch?v=WSlV5PW3QP8';
@@ -18,6 +17,7 @@ async function main() {
     await page.goto(url)
     await page.waitForSelector('#button-shape > button > yt-touch-feedback-shape > div > div.yt-spec-touch-feedback-shape__fill');
     await page.click('#button-shape > button > yt-touch-feedback-shape > div > div.yt-spec-touch-feedback-shape__fill');
+
     const result = await page.$$eval('tp-yt-paper-listbox > ytd-menu-service-item-renderer', async elements => {
         // wait time
         let data = {};
@@ -54,10 +54,8 @@ async function main() {
             console.log('end getting caption')
         };
         data = await getCaption(elements);
-        console.log('final data:');
-        console.log(data); // object
-        // return data;  // *這裡的資料無法 return
-        // return { name: '隨便回傳一個物件', content: 'result 都收得到'}
+        console.log(data);
+        return data;
     });
     console.log(result);
     // await browser.close();
