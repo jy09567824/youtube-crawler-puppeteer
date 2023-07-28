@@ -19,11 +19,16 @@
  * @property {Content[]} contents - An array of content objects.
  */
 
-let times = 5;
+let times = 11;
 
 const puppeteer = require('puppeteer');
 const fs = require('fs');
 const date = new Date().toISOString().slice(0, 19);
+const reformatData = require('./utils/reformat.js');
+
+const URL = 'https://www.youtube.com/watch?v=Uc-EpXkfMmQ&list=PLZLWHjkSUj6Zgv7zBMzMe4kA0Uh6PnV_j';
+
+const OUTPUT_FILE_NAME = `results/${date}_result.json`;
 
 const SETTINGS = 'ytd-masthead #end #button';
 const LANGUAGE = '#items > ytd-compact-link-renderer:nth-child(2)';
@@ -35,10 +40,6 @@ const LIST_TAG = 'ytd-engagement-panel-section-list-renderer';
 const HEADER_TAG = 'ytd-transcript-section-header-renderer';
 const SEGMENT_TAG = 'ytd-transcript-segment-renderer';
 const CROSS_BUTTON = 'button[aria-label="關閉轉錄稿"]';
-
-const OUTPUT_FILE_NAME = `${date}_result.json`;
-
-const URL = 'https://www.youtube.com/watch?v=D1W520QVS4I';
 
 /**
  * @typedef {import('puppeteer').Page} Page
@@ -147,7 +148,7 @@ async function fetchData(page, times) {
             const transcripts = await fetchVideoTranscripts(page);
             results.push({...info, transcripts});
             // goto next page
-            console.log('Goto next page...');
+            console.log(`Video ${i+1} has been fetched. Goto next page...`);
             const hrefElement = await page.$('a.ytp-next-button');
             await hrefElement.evaluate((link) => link.click());
             await new Promise((resolve) => setTimeout(resolve, 1500));
@@ -157,13 +158,14 @@ async function fetchData(page, times) {
 
 async function main() {
 
-    const browser = await puppeteer.launch({headless: false, defaultViewport:null});
+    const browser = await puppeteer.launch({headless: true, defaultViewport:null});
     const page = await browser.newPage();
     await page.goto(URL, {waitUntil: 'networkidle0'});
     await changeYoutubeLanguage(page);
     const data = await fetchData(page, times);
     await browser.close();
-    return data;
+    const finalData = await reformatData(data);
+    return finalData;
 }
 /**
  * @param {VideoInfo} value
